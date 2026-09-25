@@ -1,0 +1,55 @@
+name: Собрать APK
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Если проект загружен одним архивом — распаковываем
+      - name: Распаковать проект
+        run: |
+          if [ -f domashka.zip ]; then unzip -o -q domashka.zip; fi
+          ls -la
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      # Языковые модели для распознавания (русский + английский)
+      - name: Скачать модели распознавания
+        run: |
+          mkdir -p app/src/main/assets/tessdata
+          curl -fsSL -o app/src/main/assets/tessdata/rus.traineddata https://github.com/tesseract-ocr/tessdata/raw/main/rus.traineddata
+          curl -fsSL -o app/src/main/assets/tessdata/eng.traineddata https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata
+          ls -la app/src/main/assets/tessdata
+
+      - name: Сборка
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Переименовать APK
+        run: cp app/build/outputs/apk/release/app-release.apk Domashka.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Domashka-apk
+          path: Domashka.apk
+
+      # Выкладываем APK в «Releases» — оттуда удобно скачать прямо на телефон
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Домашка, сборка ${{ github.run_number }}
+          files: Domashka.apk
